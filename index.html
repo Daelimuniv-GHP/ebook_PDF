@@ -1,0 +1,2611 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Photo Album Studio — 사진 올리기 및 앨범 미리보기</title>
+    <meta
+      name="description"
+      content="Upload multiple photos and preview them one per page in a clean single-file HTML photo album."
+    />
+    <meta property="og:title" content="Photo Album Studio" />
+    <meta
+      property="og:description"
+      content="Upload multiple photos and preview them one per page in a clean single-file HTML photo album."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=JetBrains+Mono:wght@400;500&family=Nanum+Pen+Script&family=Noto+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <style>
+      :root {
+        --bg-canvas: #f4f4f2;
+        --bg-surface: #ffffff;
+        --bg-subtle: #ecece8;
+        --text-primary: #141413;
+        --text-secondary: #5c5c57;
+        --text-muted: #8a8a83;
+        --border-hairline: #e2e1dc;
+        --border-strong: #c9c8c0;
+        --accent: #2563eb;
+        --accent-hover: #1d4ed8;
+        --accent-soft: #eff6ff;
+        --danger: #dc2626;
+        --danger-soft: #fef2f2;
+        --shadow-page: 0 20px 50px -16px rgba(20, 20, 19, 0.1), 0 4px 14px -4px rgba(20, 20, 19, 0.05);
+        --shadow-sm: 0 1px 2px rgba(20, 20, 19, 0.05);
+        --font-sans: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
+        --font-serif: 'Playfair Display', 'Noto Serif KR', Georgia, serif;
+        --font-hand: 'Gaegu', 'Nanum Pen Script', cursive, sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        background-color: var(--bg-canvas);
+        color: var(--text-primary);
+        font-family: var(--font-sans);
+        font-size: 15px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button {
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+        border: none;
+        background: none;
+        padding: 0;
+      }
+
+      button:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* App Shell */
+      .app-shell {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Top Bar (3-zone contract) */
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background-color: rgba(244, 244, 242, 0.92);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--border-hairline);
+      }
+
+      .topbar-inner {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 14px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 32px;
+      }
+
+      .brand {
+        font-family: var(--font-serif);
+        font-size: 1.2rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: var(--text-primary);
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      .topbar-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .topbar-meta .mono {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 8px 18px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: background-color 160ms var(--ease-out), border-color 160ms var(--ease-out),
+          color 160ms var(--ease-out), transform 160ms var(--ease-out), opacity 160ms var(--ease-out);
+      }
+
+      .btn:active:not(:disabled) {
+        transform: scale(0.985);
+      }
+
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background-color: var(--accent);
+        color: #ffffff;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background-color: var(--accent-hover);
+      }
+
+      .btn-secondary {
+        background-color: var(--bg-surface);
+        color: var(--text-primary);
+        border: 1px solid var(--border-hairline);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background-color: var(--bg-subtle);
+        border-color: var(--border-strong);
+      }
+
+      .btn-ghost {
+        color: var(--text-secondary);
+        padding: 8px 12px;
+      }
+
+      .btn-ghost:hover:not(:disabled) {
+        color: var(--danger);
+        background-color: var(--danger-soft);
+      }
+
+      .icon {
+        width: 17px;
+        height: 17px;
+        flex-shrink: 0;
+      }
+
+      /* Main Workspace */
+      .main {
+        flex: 1;
+        width: 100%;
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 28px 24px 40px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Empty State / Initial Upload View */
+      .empty-stage {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 0;
+      }
+
+      .dropzone-card {
+        width: 100%;
+        max-width: 720px;
+        background-color: var(--bg-surface);
+        border: 1.5px dashed var(--border-strong);
+        border-radius: 16px;
+        padding: 56px 36px;
+        text-align: center;
+        box-shadow: var(--shadow-sm);
+        transition: border-color 180ms var(--ease-out), background-color 180ms var(--ease-out),
+          transform 180ms var(--ease-out);
+      }
+
+      .dropzone-card.is-dragover {
+        border-color: var(--accent);
+        background-color: var(--accent-soft);
+        transform: translateY(-2px);
+      }
+
+      .dropzone-icon-wrap {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 20px;
+        border-radius: 12px;
+        background-color: var(--bg-canvas);
+        border: 1px solid var(--border-hairline);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-primary);
+      }
+
+      .dropzone-icon-wrap svg {
+        width: 26px;
+        height: 26px;
+      }
+
+      .dropzone-title {
+        margin: 0 0 10px;
+        font-family: var(--font-serif);
+        font-size: clamp(1.5rem, 2.5vw, 2rem);
+        font-weight: 600;
+        line-height: 1.25;
+        letter-spacing: -0.02em;
+        text-wrap: balance;
+      }
+
+      .dropzone-desc {
+        margin: 0 auto 28px;
+        max-width: 46ch;
+        color: var(--text-secondary);
+        font-size: 15px;
+        line-height: 1.6;
+      }
+
+      .dropzone-actions {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .dropzone-hint {
+        margin-top: 20px;
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+
+      /* Album Preview Workspace */
+      .album-workspace {
+        display: none;
+        flex-direction: column;
+        gap: 24px;
+        flex: 1;
+      }
+
+      .album-workspace.is-visible {
+        display: flex;
+      }
+
+      /* Workspace Sub-Toolbar */
+      .workspace-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .workspace-heading {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+
+      .workspace-heading h1 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 1.35rem;
+        font-weight: 600;
+        letter-spacing: -0.015em;
+      }
+
+      .workspace-sub {
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+
+      .workspace-tools {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .workspace-style-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .style-control-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .style-control-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+
+      /* Single-Page Album Stage */
+      .stage-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+      }
+
+      .stage-wrap.is-dragover .album-page {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16), var(--shadow-page);
+      }
+
+      .nav-circle-btn {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background-color: var(--bg-surface);
+        border: 1px solid var(--border-hairline);
+        box-shadow: var(--shadow-sm);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-primary);
+        flex-shrink: 0;
+        transition: background-color 160ms var(--ease-out), border-color 160ms var(--ease-out),
+          transform 160ms var(--ease-out), opacity 160ms var(--ease-out);
+      }
+
+      .nav-circle-btn:hover:not(:disabled) {
+        background-color: var(--bg-subtle);
+        border-color: var(--border-strong);
+      }
+
+      .nav-circle-btn:active:not(:disabled) {
+        transform: scale(0.95);
+      }
+
+      .nav-circle-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+
+      /* Album Theme Switcher */
+      .theme-switcher {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+        background-color: var(--bg-subtle);
+        border: 1px solid var(--border-hairline);
+        border-radius: 10px;
+        flex-wrap: wrap;
+      }
+
+      .theme-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 32px;
+        padding: 5px 11px;
+        border-radius: 7px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out),
+          box-shadow 150ms var(--ease-out);
+      }
+
+      .theme-btn:hover {
+        color: var(--text-primary);
+      }
+
+      .theme-btn.is-active {
+        background-color: var(--bg-surface);
+        color: var(--text-primary);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .theme-swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        flex-shrink: 0;
+        border: 1px solid rgba(20, 20, 19, 0.22);
+      }
+
+      .theme-swatch-white {
+        background-color: #ffffff;
+      }
+
+      .theme-swatch-beige {
+        background-color: #f5efe4;
+      }
+
+      .theme-swatch-navy {
+        background-color: #142033;
+      }
+
+      .font-btn-gothic {
+        font-family: var(--font-sans);
+      }
+
+      .font-btn-serif {
+        font-family: var(--font-serif);
+      }
+
+      .font-btn-hand {
+        font-family: var(--font-hand);
+        font-size: 15px;
+      }
+
+      /* Realistic Archival Album Page */
+      .album-page {
+        --page-bg: #ffffff;
+        --page-mat: #fafaf8;
+        --page-mat-border: #ecebe6;
+        --page-border: #e2e1dc;
+        --page-divider: #c9c8c0;
+        --page-text: #141413;
+        --page-text-secondary: #5c5c57;
+        --page-text-muted: #8a8a83;
+        --page-input-hover: #ffffff;
+        --page-photo-input-hover: #fafaf8;
+        --page-focus-accent: #2563eb;
+        --page-title-font: var(--font-sans);
+        --page-body-font: var(--font-sans);
+        flex: 1;
+        max-width: 900px;
+        background-color: var(--page-bg);
+        color: var(--page-text);
+        border: 1px solid var(--page-border);
+        border-radius: 10px;
+        box-shadow: var(--shadow-page);
+        padding: 28px 32px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        transition: background-color 180ms var(--ease-out), color 180ms var(--ease-out),
+          border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
+      }
+
+      .album-page[data-album-font='gothic'] {
+        --page-title-font: var(--font-sans);
+        --page-body-font: var(--font-sans);
+      }
+
+      .album-page[data-album-font='serif'] {
+        --page-title-font: var(--font-serif);
+        --page-body-font: var(--font-serif);
+      }
+
+      .album-page[data-album-font='hand'] {
+        --page-title-font: var(--font-hand);
+        --page-body-font: var(--font-hand);
+      }
+
+      .album-page[data-album-theme='beige'] {
+        --page-bg: #f5efe4;
+        --page-mat: #faf5ec;
+        --page-mat-border: #e6dac6;
+        --page-border: #e2d6c3;
+        --page-divider: #c4b399;
+        --page-text: #2c2219;
+        --page-text-secondary: #615242;
+        --page-text-muted: #8a7967;
+        --page-input-hover: #fffdf8;
+        --page-photo-input-hover: #faf5ec;
+        --page-focus-accent: #2563eb;
+      }
+
+      .album-page[data-album-theme='navy'] {
+        --page-bg: #142033;
+        --page-mat: #1b2a42;
+        --page-mat-border: #2a3e5c;
+        --page-border: #2b3f5e;
+        --page-divider: #4c6488;
+        --page-text: #f3f6fa;
+        --page-text-secondary: #b8c5d9;
+        --page-text-muted: #899bb5;
+        --page-input-hover: #213452;
+        --page-photo-input-hover: #1b2a42;
+        --page-focus-accent: #60a5fa;
+      }
+
+      .page-photo-frame {
+        position: relative;
+        width: 100%;
+        height: min(50vh, 460px);
+        min-height: 260px;
+        background-color: var(--page-mat);
+        border: 1px solid var(--page-mat-border);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        padding: 16px;
+        transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out);
+      }
+
+      .page-photo-frame img {
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        display: block;
+        border-radius: 2px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+      }
+
+      .page-photo-frame img.is-switching {
+        opacity: 0;
+        transform: scale(0.99);
+      }
+
+      /* Editorial Caption Editor (Title & Description per Photo) */
+      .page-caption-editor {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 4px 2px 2px;
+      }
+
+      .caption-field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .caption-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--page-text-muted);
+      }
+
+      .caption-title-input {
+        width: 100%;
+        font-family: var(--page-title-font);
+        font-size: 1.35rem;
+        font-weight: 600;
+        line-height: 1.35;
+        letter-spacing: -0.015em;
+        color: var(--page-text);
+        background-color: transparent;
+        border: 1px solid transparent;
+        border-bottom-color: var(--page-border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out),
+          color 160ms var(--ease-out);
+      }
+
+      .caption-title-input::placeholder {
+        color: var(--page-text-muted);
+        font-weight: 500;
+      }
+
+      .caption-title-input:hover {
+        background-color: var(--page-photo-input-hover);
+        border-color: var(--page-border);
+      }
+
+      .caption-title-input:focus {
+        outline: none;
+        background-color: var(--page-photo-input-hover);
+        border-color: var(--page-focus-accent);
+      }
+
+      .caption-desc-input {
+        width: 100%;
+        min-height: 68px;
+        font-family: var(--page-body-font);
+        font-size: 14.5px;
+        line-height: 1.65;
+        color: var(--page-text-secondary);
+        background-color: transparent;
+        border: 1px solid transparent;
+        border-bottom-color: var(--page-border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        resize: vertical;
+        transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out),
+          color 160ms var(--ease-out);
+      }
+
+      .album-page[data-album-font='hand'] .caption-title-input {
+        font-size: 1.6rem;
+        font-weight: 700;
+      }
+
+      .album-page[data-album-font='hand'] .caption-desc-input {
+        font-size: 17px;
+      }
+
+      .caption-desc-input::placeholder {
+        color: var(--page-text-muted);
+      }
+
+      .caption-desc-input:hover {
+        background-color: var(--page-photo-input-hover);
+        border-color: var(--page-border);
+      }
+
+      .caption-desc-input:focus {
+        outline: none;
+        background-color: var(--page-photo-input-hover);
+        border-color: var(--page-focus-accent);
+        color: var(--page-text);
+      }
+
+      .page-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--page-border);
+        flex-wrap: wrap;
+      }
+
+      .page-meta-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--page-text-secondary);
+        min-width: 0;
+        flex-wrap: wrap;
+      }
+
+      .page-filename {
+        font-weight: 500;
+        color: var(--page-text);
+        max-width: 280px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .page-sep {
+        color: var(--page-text-muted);
+      }
+
+      .page-mono {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 12.5px;
+      }
+
+      .page-number-label {
+        font-family: var(--font-serif);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--page-text);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      /* Cover & Closing Views inside .album-page */
+      .special-page-view {
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-height: min(62vh, 580px);
+        padding: 40px 28px;
+        background-color: var(--page-mat);
+        border: 1px solid var(--page-mat-border);
+        border-radius: 4px;
+        text-align: center;
+        gap: 20px;
+        transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out);
+      }
+
+      .special-page-view.is-active {
+        display: flex;
+      }
+
+      .photo-page-view {
+        display: none;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .photo-page-view.is-active {
+        display: flex;
+      }
+
+      .special-kicker {
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.14em;
+        color: var(--page-text-muted);
+      }
+
+      .cover-fields {
+        width: 100%;
+        max-width: 680px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .cover-title-input {
+        width: 100%;
+        font-family: var(--page-title-font);
+        font-size: clamp(2rem, 3.8vw, 3.1rem);
+        font-weight: 600;
+        line-height: 1.25;
+        letter-spacing: -0.02em;
+        text-align: center;
+        color: var(--page-text);
+        background-color: transparent;
+        border: 1px solid transparent;
+        border-bottom-color: var(--page-border);
+        border-radius: 8px;
+        padding: 10px 14px;
+        resize: none;
+        overflow: hidden;
+        transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out),
+          color 160ms var(--ease-out);
+      }
+
+      .cover-title-input::placeholder {
+        color: var(--page-text-muted);
+        font-weight: 500;
+      }
+
+      .cover-title-input:hover,
+      .cover-subtitle-input:hover,
+      .cover-meta-input:hover,
+      .closing-message-input:hover {
+        background-color: var(--page-input-hover);
+        border-color: var(--page-border);
+      }
+
+      .cover-title-input:focus,
+      .cover-subtitle-input:focus,
+      .cover-meta-input:focus,
+      .closing-message-input:focus {
+        outline: none;
+        background-color: var(--page-input-hover);
+        border-color: var(--page-focus-accent);
+      }
+
+      .cover-subtitle-input {
+        width: 100%;
+        font-family: var(--page-body-font);
+        font-size: clamp(1.05rem, 1.5vw, 1.25rem);
+        font-weight: 400;
+        line-height: 1.5;
+        text-align: center;
+        color: var(--page-text-secondary);
+        background-color: transparent;
+        border: 1px solid transparent;
+        border-bottom-color: var(--page-border);
+        border-radius: 6px;
+        padding: 8px 14px;
+        transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out),
+          color 160ms var(--ease-out);
+      }
+
+      .cover-subtitle-input::placeholder,
+      .cover-meta-input::placeholder,
+      .closing-message-input::placeholder {
+        color: var(--page-text-muted);
+      }
+
+      .cover-divider {
+        width: 72px;
+        height: 1px;
+        background-color: var(--page-divider);
+        margin: 10px auto;
+      }
+
+      .cover-meta-row {
+        width: 100%;
+        max-width: 520px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-top: 6px;
+      }
+
+      .cover-meta-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        text-align: center;
+      }
+
+      .cover-meta-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--page-text-muted);
+      }
+
+      .cover-meta-input {
+        width: 100%;
+        font-family: var(--page-body-font);
+        font-size: 1.08rem;
+        font-weight: 500;
+        text-align: center;
+        color: var(--page-text);
+        background-color: transparent;
+        border: 1px solid transparent;
+        border-bottom-color: var(--page-border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out),
+          color 160ms var(--ease-out);
+      }
+
+      .closing-fields {
+        width: 100%;
+        max-width: 620px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .closing-message-input {
+        width: 100%;
+        min-height: 180px;
+        font-family: var(--page-title-font);
+        font-size: clamp(1.15rem, 1.9vw, 1.45rem);
+        line-height: 1.8;
+        text-align: center;
+        color: var(--page-text);
+        background-color: transparent;
+        border: 1px solid transparent;
+        border-bottom-color: var(--page-border);
+        border-radius: 8px;
+        padding: 14px 16px;
+        resize: vertical;
+        transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out),
+          color 160ms var(--ease-out);
+      }
+
+      .album-page[data-album-font='hand'] .cover-title-input {
+        font-size: clamp(2.4rem, 4.3vw, 3.6rem);
+        font-weight: 700;
+      }
+
+      .album-page[data-album-font='hand'] .cover-subtitle-input,
+      .album-page[data-album-font='hand'] .cover-meta-input {
+        font-size: 1.3rem;
+      }
+
+      .album-page[data-album-font='hand'] .closing-message-input {
+        font-size: clamp(1.35rem, 2.2vw, 1.7rem);
+      }
+
+      /* Special Thumb Cards (표지 / 마무리) */
+      .thumb-special-btn {
+        width: 100%;
+        height: 100%;
+        border-radius: 5px;
+        background-color: #fafaf8;
+        border: 1px solid var(--border-hairline);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 6px;
+        color: var(--text-primary);
+      }
+
+      .thumb-special-kicker {
+        font-family: var(--font-serif);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .thumb-special-sub {
+        font-size: 11px;
+        color: var(--text-muted);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      @media (max-width: 640px) {
+        .cover-meta-row {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* Mobile / Bottom Prev-Next Bar */
+      .pager-bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+      }
+
+      .pager-indicator {
+        min-width: 92px;
+        text-align: center;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-secondary);
+      }
+
+      /* Thumbnail Strip */
+      .thumb-section {
+        border-top: 1px solid var(--border-hairline);
+        padding-top: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .thumb-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+
+      .thumb-strip {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        overflow-x: auto;
+        padding: 4px 2px 10px;
+        scrollbar-width: thin;
+      }
+
+      .thumb-item {
+        position: relative;
+        flex: 0 0 auto;
+        width: 92px;
+        height: 92px;
+        border-radius: 8px;
+        border: 2px solid transparent;
+        background-color: var(--bg-surface);
+        padding: 4px;
+        box-shadow: var(--shadow-sm);
+        transition: border-color 150ms var(--ease-out), transform 150ms var(--ease-out);
+      }
+
+      .thumb-item:hover {
+        transform: translateY(-2px);
+      }
+
+      .thumb-item.is-active {
+        border-color: var(--accent);
+      }
+
+      .thumb-select-btn {
+        width: 100%;
+        height: 100%;
+        border-radius: 5px;
+        overflow: hidden;
+        display: block;
+        background-color: var(--bg-subtle);
+      }
+
+      .thumb-select-btn img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .thumb-index {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background-color: rgba(20, 20, 19, 0.72);
+        color: #ffffff;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+      }
+
+      .thumb-remove-btn {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background-color: var(--bg-surface);
+        border: 1px solid var(--border-strong);
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        box-shadow: var(--shadow-sm);
+        transition: opacity 140ms var(--ease-out), color 140ms var(--ease-out),
+          background-color 140ms var(--ease-out);
+      }
+
+      .thumb-item:hover .thumb-remove-btn,
+      .thumb-item:focus-within .thumb-remove-btn,
+      .thumb-item.is-active .thumb-remove-btn {
+        opacity: 1;
+      }
+
+      .thumb-remove-btn:hover {
+        color: #ffffff;
+        background-color: var(--danger);
+        border-color: var(--danger);
+      }
+
+      /* Add-more card inside thumbnail strip */
+      .thumb-add-btn {
+        flex: 0 0 auto;
+        width: 92px;
+        height: 92px;
+        border-radius: 8px;
+        border: 1.5px dashed var(--border-strong);
+        background-color: transparent;
+        color: var(--text-secondary);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        transition: border-color 150ms var(--ease-out), color 150ms var(--ease-out),
+          background-color 150ms var(--ease-out);
+      }
+
+      .thumb-add-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background-color: var(--accent-soft);
+      }
+
+      /* Toast Notice */
+      .notice-banner {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        background-color: var(--danger-soft);
+        border: 1px solid #fecaca;
+        color: #991b1b;
+        font-size: 13px;
+        margin-bottom: 16px;
+      }
+
+      .notice-banner.is-visible {
+        display: flex;
+      }
+
+      @media (max-width: 768px) {
+        .topbar-inner {
+          padding: 12px 16px;
+          gap: 12px;
+        }
+
+        .topbar-meta {
+          display: none;
+        }
+
+        .main {
+          padding: 18px 16px 28px;
+        }
+
+        .dropzone-card {
+          padding: 40px 20px;
+        }
+
+        .nav-circle-btn {
+          display: none;
+        }
+
+        .album-page {
+          padding: 16px;
+        }
+
+        .page-photo-frame {
+          height: min(52vh, 380px);
+          padding: 10px;
+        }
+
+        .thumb-remove-btn {
+          opacity: 1;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="topbar-inner">
+          <span class="brand">Photo Album Studio</span>
+
+          <div class="topbar-meta" aria-live="polite">
+            <span id="topbarSummary">사진을 올려 한 쪽에 한 장씩 미리보세요</span>
+          </div>
+
+          <div class="topbar-actions">
+            <button type="button" id="topUploadBtn" class="btn btn-primary">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span>사진 올리기</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="main">
+        <!-- Hidden File Input -->
+        <input
+          type="file"
+          id="fileInput"
+          class="sr-only"
+          accept="image/*"
+          multiple
+        />
+
+        <!-- Error / Warning Notice -->
+        <div id="noticeBanner" class="notice-banner" role="alert">
+          <span id="noticeText"></span>
+          <button type="button" id="noticeCloseBtn" class="btn-ghost" style="min-height: 28px; padding: 2px 8px; border-radius: 6px;">닫기</button>
+        </div>
+
+        <!-- Empty State: Initial Photo Upload -->
+        <section id="emptyStage" class="empty-stage" aria-label="사진 업로드 영역">
+          <div id="dropzone" class="dropzone-card">
+            <div class="dropzone-icon-wrap" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            </div>
+            <h1 class="dropzone-title">사진 여러 장을 올려 앨범을 미리보세요</h1>
+            <p class="dropzone-desc">
+              원하는 사진을 한꺼번에 선택하거나 이 영역으로 끌어다 놓으세요.
+              올린 사진은 한 페이지에 한 장씩 깔끔한 앨범 형태로 펼쳐집니다.
+            </p>
+            <div class="dropzone-actions">
+              <button type="button" id="emptyUploadBtn" class="btn btn-primary">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>컴퓨터에서 사진 선택</span>
+              </button>
+            </div>
+            <p class="dropzone-hint">JPG, PNG, WEBP, GIF 등 이미지 파일 여러 장 동시 업로드 지원</p>
+          </div>
+        </section>
+
+        <!-- Album Preview Workspace -->
+        <section id="albumWorkspace" class="album-workspace" aria-label="앨범 미리보기">
+          <div class="workspace-bar">
+            <div class="workspace-heading">
+              <h1>앨범 미리보기</h1>
+              <span id="workspaceCount" class="workspace-sub">총 0장</span>
+            </div>
+
+            <div class="workspace-tools">
+              <button type="button" id="addMoreBtn" class="btn btn-secondary">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>사진 추가</span>
+              </button>
+              <button type="button" id="clearAllBtn" class="btn btn-ghost">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6" />
+                  <path d="M14 11v6" />
+                </svg>
+                <span>전체 비우기</span>
+              </button>
+              <button type="button" id="exportPngBtn" class="btn btn-secondary" title="현재 보이는 페이지를 PNG 이미지로 저장">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                <span id="exportPngLabel">PNG로 저장</span>
+              </button>
+              <button type="button" id="exportPdfBtn" class="btn btn-primary">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="12" y1="18" x2="12" y2="12" />
+                  <polyline points="9 15 12 18 15 15" />
+                </svg>
+                <span id="exportPdfLabel">PDF로 저장</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="workspace-style-bar">
+            <div class="style-control-group">
+              <span class="style-control-label">색 분위기</span>
+              <div class="theme-switcher" role="group" aria-label="앨범 색 분위기 선택">
+                <button type="button" class="theme-btn is-active" data-theme="white" aria-pressed="true">
+                  <span class="theme-swatch theme-swatch-white" aria-hidden="true"></span>
+                  <span>흰색(깔끔)</span>
+                </button>
+                <button type="button" class="theme-btn" data-theme="beige" aria-pressed="false">
+                  <span class="theme-swatch theme-swatch-beige" aria-hidden="true"></span>
+                  <span>베이지(따뜻한 종이)</span>
+                </button>
+                <button type="button" class="theme-btn" data-theme="navy" aria-pressed="false">
+                  <span class="theme-swatch theme-swatch-navy" aria-hidden="true"></span>
+                  <span>네이비(차분함)</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="style-control-group">
+              <span class="style-control-label">글꼴</span>
+              <div class="theme-switcher" role="group" aria-label="앨범 글꼴 선택">
+                <button type="button" class="theme-btn font-btn font-btn-gothic is-active" data-font="gothic" aria-pressed="true">
+                  <span>고딕</span>
+                </button>
+                <button type="button" class="theme-btn font-btn font-btn-serif" data-font="serif" aria-pressed="false">
+                  <span>명조</span>
+                </button>
+                <button type="button" class="theme-btn font-btn font-btn-hand" data-font="hand" aria-pressed="false">
+                  <span>손글씨</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Single-Page Stage -->
+          <div id="stageDropArea" class="stage-wrap">
+            <button
+              type="button"
+              id="sidePrevBtn"
+              class="nav-circle-btn"
+              aria-label="이전 사진"
+              title="이전 사진 (←)"
+            >
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+
+            <article id="albumPageCard" class="album-page" data-album-theme="white" data-album-font="gothic" aria-live="polite">
+              <!-- First Page: Cover -->
+              <div id="coverPageView" class="special-page-view">
+                <span class="special-kicker">ALBUM COVER · 표지</span>
+                <div class="cover-fields">
+                  <label for="coverTitleInput" class="sr-only">앨범 제목</label>
+                  <textarea
+                    id="coverTitleInput"
+                    class="cover-title-input"
+                    placeholder="앨범 제목을 입력하세요"
+                    rows="1"
+                    maxlength="100"
+                  ></textarea>
+
+                  <label for="coverSubtitleInput" class="sr-only">앨범 부제</label>
+                  <input
+                    type="text"
+                    id="coverSubtitleInput"
+                    class="cover-subtitle-input"
+                    placeholder="부제를 입력하세요"
+                    maxlength="120"
+                  />
+
+                  <div class="cover-divider" aria-hidden="true"></div>
+
+                  <div class="cover-meta-row">
+                    <div class="cover-meta-field">
+                      <label for="coverAuthorInput" class="cover-meta-label">이름</label>
+                      <input
+                        type="text"
+                        id="coverAuthorInput"
+                        class="cover-meta-input"
+                        placeholder="만든 이 이름"
+                        maxlength="60"
+                      />
+                    </div>
+                    <div class="cover-meta-field">
+                      <label for="coverDateInput" class="cover-meta-label">날짜</label>
+                      <input
+                        type="text"
+                        id="coverDateInput"
+                        class="cover-meta-input"
+                        placeholder="예: 2026. 11. 26"
+                        maxlength="40"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Middle Pages: Single Photo + Title & Description -->
+              <div id="photoPageView" class="photo-page-view">
+                <div class="page-photo-frame">
+                  <img id="previewImage" src="" alt="선택된 앨범 사진 미리보기" />
+                </div>
+
+                <div class="page-caption-editor">
+                  <div class="caption-field-group">
+                    <label for="photoTitleInput" class="caption-label">제목</label>
+                    <input
+                      type="text"
+                      id="photoTitleInput"
+                      class="caption-title-input"
+                      placeholder="사진의 제목을 입력하세요"
+                      maxlength="120"
+                    />
+                  </div>
+                  <div class="caption-field-group">
+                    <label for="photoDescInput" class="caption-label">설명</label>
+                    <textarea
+                      id="photoDescInput"
+                      class="caption-desc-input"
+                      placeholder="사진에 담긴 이야기나 메모를 적어보세요"
+                      rows="2"
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Last Page: Closing / Epilogue -->
+              <div id="closingPageView" class="special-page-view">
+                <span class="special-kicker">EPILOGUE · 마무리</span>
+                <div class="closing-fields">
+                  <div class="cover-divider" aria-hidden="true"></div>
+                  <label for="closingMessageInput" class="sr-only">마무리 문구</label>
+                  <textarea
+                    id="closingMessageInput"
+                    class="closing-message-input"
+                    placeholder="앨범의 마지막을 장식할 마무리 문구를 적어보세요..."
+                    rows="4"
+                  ></textarea>
+                  <div class="cover-divider" aria-hidden="true"></div>
+                </div>
+              </div>
+
+              <div class="page-footer">
+                <div class="page-meta-group">
+                  <span id="metaFilename" class="page-filename">-</span>
+                  <span id="metaSep1" class="page-sep" aria-hidden="true">·</span>
+                  <span id="metaDimensions" class="page-mono">-</span>
+                  <span id="metaSep2" class="page-sep" aria-hidden="true">·</span>
+                  <span id="metaSize" class="page-mono">-</span>
+                </div>
+                <div id="pageNumberLabel" class="page-number-label">Page 1 of 1</div>
+              </div>
+            </article>
+
+            <button
+              type="button"
+              id="sideNextBtn"
+              class="nav-circle-btn"
+              aria-label="다음 사진"
+              title="다음 사진 (→)"
+            >
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Explicit Previous / Next Controls -->
+          <div class="pager-bar">
+            <button type="button" id="prevBtn" class="btn btn-secondary">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              <span>이전</span>
+            </button>
+
+            <span id="pagerIndicator" class="pager-indicator">1 / 1</span>
+
+            <button type="button" id="nextBtn" class="btn btn-secondary">
+              <span>다음</span>
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Thumbnail Strip -->
+          <div class="thumb-section">
+            <div class="thumb-header">
+              <span>페이지 목록 (클릭하여 이동 · 키보드 ← / → 지원)</span>
+              <span>드래그 앤 드롭으로 사진 추가 가능</span>
+            </div>
+            <div id="thumbStrip" class="thumb-strip" role="list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      (() => {
+        /** @type {Array<{id: string, name: string, size: number, url: string, width: number, height: number, title: string, description: string}>} */
+        const photos = [];
+        const albumMeta = {
+          title: '',
+          subtitle: '',
+          author: '',
+          date: '',
+          closingMessage: '',
+        };
+        // currentPageIndex: 0 = Cover, 1..photos.length = Photo, photos.length + 1 = Closing
+        let currentPageIndex = 0;
+        let currentTheme = 'white';
+        let currentFont = 'gothic';
+
+        const ALBUM_THEMES = {
+          white: {
+            bg: '#FFFFFF',
+            mat: '#FAFAF8',
+            matBorder: '#ECEBE6',
+            border: '#E2E1DC',
+            divider: '#C9C8C0',
+            text: '#141413',
+            textSecondary: '#5C5C57',
+            textMuted: '#8A8A83',
+          },
+          beige: {
+            bg: '#F5EFE4',
+            mat: '#FAF5EC',
+            matBorder: '#E6DAC6',
+            border: '#E2D6C3',
+            divider: '#C4B399',
+            text: '#2C2219',
+            textSecondary: '#615242',
+            textMuted: '#8A7967',
+          },
+          navy: {
+            bg: '#142033',
+            mat: '#1B2A42',
+            matBorder: '#2A3E5C',
+            border: '#2B3F5E',
+            divider: '#4C6488',
+            text: '#F3F6FA',
+            textSecondary: '#B8C5D9',
+            textMuted: '#899BB5',
+          },
+        };
+
+        const ALBUM_FONTS = {
+          gothic: {
+            titleFamily: '"Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif',
+            bodyFamily: '"Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif',
+            titleWeight: '600',
+            bodyWeight: '400',
+            titleScale: 1,
+            bodyScale: 1,
+            loadSpecs: ['600 46px "Noto Sans KR"', '400 28px "Noto Sans KR"'],
+          },
+          serif: {
+            titleFamily: '"Playfair Display", "Noto Serif KR", Georgia, serif',
+            bodyFamily: '"Noto Serif KR", Georgia, serif',
+            titleWeight: '600',
+            bodyWeight: '400',
+            titleScale: 1,
+            bodyScale: 1,
+            loadSpecs: [
+              '600 46px "Playfair Display"',
+              '600 46px "Noto Serif KR"',
+              '400 28px "Noto Serif KR"',
+            ],
+          },
+          hand: {
+            titleFamily: '"Gaegu", "Nanum Pen Script", cursive, sans-serif',
+            bodyFamily: '"Gaegu", "Nanum Pen Script", cursive, sans-serif',
+            titleWeight: '700',
+            bodyWeight: '400',
+            titleScale: 1.15,
+            bodyScale: 1.18,
+            loadSpecs: [
+              '700 46px "Gaegu"',
+              '400 32px "Gaegu"',
+              '400 32px "Nanum Pen Script"',
+            ],
+          },
+        };
+
+        // DOM Elements
+        const fileInput = document.getElementById('fileInput');
+        const topUploadBtn = document.getElementById('topUploadBtn');
+        const emptyUploadBtn = document.getElementById('emptyUploadBtn');
+        const addMoreBtn = document.getElementById('addMoreBtn');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+        const exportPngBtn = document.getElementById('exportPngBtn');
+        const exportPngLabel = document.getElementById('exportPngLabel');
+        const exportPdfBtn = document.getElementById('exportPdfBtn');
+        const exportPdfLabel = document.getElementById('exportPdfLabel');
+        const themeButtons = Array.from(document.querySelectorAll('.theme-btn[data-theme]'));
+        const fontButtons = Array.from(document.querySelectorAll('.font-btn[data-font]'));
+        const albumPageCard = document.getElementById('albumPageCard');
+
+        const emptyStage = document.getElementById('emptyStage');
+        const dropzone = document.getElementById('dropzone');
+        const albumWorkspace = document.getElementById('albumWorkspace');
+        const stageDropArea = document.getElementById('stageDropArea');
+
+        const topbarSummary = document.getElementById('topbarSummary');
+        const workspaceCount = document.getElementById('workspaceCount');
+
+        const coverPageView = document.getElementById('coverPageView');
+        const photoPageView = document.getElementById('photoPageView');
+        const closingPageView = document.getElementById('closingPageView');
+
+        const coverTitleInput = document.getElementById('coverTitleInput');
+        const coverSubtitleInput = document.getElementById('coverSubtitleInput');
+        const coverAuthorInput = document.getElementById('coverAuthorInput');
+        const coverDateInput = document.getElementById('coverDateInput');
+        const closingMessageInput = document.getElementById('closingMessageInput');
+
+        const previewImage = document.getElementById('previewImage');
+        const photoTitleInput = document.getElementById('photoTitleInput');
+        const photoDescInput = document.getElementById('photoDescInput');
+        const metaFilename = document.getElementById('metaFilename');
+        const metaSep1 = document.getElementById('metaSep1');
+        const metaDimensions = document.getElementById('metaDimensions');
+        const metaSep2 = document.getElementById('metaSep2');
+        const metaSize = document.getElementById('metaSize');
+        const pageNumberLabel = document.getElementById('pageNumberLabel');
+
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const sidePrevBtn = document.getElementById('sidePrevBtn');
+        const sideNextBtn = document.getElementById('sideNextBtn');
+        const pagerIndicator = document.getElementById('pagerIndicator');
+        const thumbStrip = document.getElementById('thumbStrip');
+
+        const noticeBanner = document.getElementById('noticeBanner');
+        const noticeText = document.getElementById('noticeText');
+        const noticeCloseBtn = document.getElementById('noticeCloseBtn');
+
+        function formatBytes(bytes) {
+          if (bytes < 1024) return `${bytes} B`;
+          const kb = bytes / 1024;
+          if (kb < 1024) return `${kb.toFixed(1)} KB`;
+          return `${(kb / 1024).toFixed(2)} MB`;
+        }
+
+        function showNotice(message) {
+          noticeText.textContent = message;
+          noticeBanner.classList.add('is-visible');
+        }
+
+        function hideNotice() {
+          noticeBanner.classList.remove('is-visible');
+          noticeText.textContent = '';
+        }
+
+        function openFilePicker() {
+          fileInput.value = '';
+          fileInput.click();
+        }
+
+        function readImageDimensions(url) {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight, ok: true });
+            img.onerror = () => resolve({ width: 0, height: 0, ok: false });
+            img.src = url;
+          });
+        }
+
+        async function handleFiles(fileList) {
+          hideNotice();
+          const files = Array.from(fileList || []);
+          if (files.length === 0) return;
+
+          const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+          const skippedCount = files.length - imageFiles.length;
+
+          if (imageFiles.length === 0) {
+            showNotice('이미지 파일(JPG, PNG, WEBP 등)만 앨범에 올릴 수 있습니다.');
+            return;
+          }
+
+          const wasEmpty = photos.length === 0;
+          let failedDecode = 0;
+
+          for (const file of imageFiles) {
+            const url = URL.createObjectURL(file);
+            const dim = await readImageDimensions(url);
+            if (!dim.ok) {
+              URL.revokeObjectURL(url);
+              failedDecode += 1;
+              continue;
+            }
+            photos.push({
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+              name: file.name,
+              size: file.size,
+              url,
+              width: dim.width,
+              height: dim.height,
+              title: '',
+              description: '',
+            });
+          }
+
+          if (skippedCount > 0 || failedDecode > 0) {
+            const totalSkipped = skippedCount + failedDecode;
+            showNotice(`이미지 형식이 아니거나 브라우저에서 읽을 수 없는 파일 ${totalSkipped}개는 제외되었습니다.`);
+          }
+
+          if (photos.length > 0 && wasEmpty) {
+            currentPageIndex = 0;
+          } else if (photos.length > 0 && !wasEmpty) {
+            currentPageIndex = Math.min(currentPageIndex, photos.length + 1);
+          }
+
+          render();
+        }
+
+        function getTotalPages() {
+          return photos.length > 0 ? photos.length + 2 : 0;
+        }
+
+        function goToPage(pageIndex) {
+          const total = getTotalPages();
+          if (total === 0) return;
+          const clamped = Math.max(0, Math.min(pageIndex, total - 1));
+          if (clamped === currentPageIndex) return;
+          currentPageIndex = clamped;
+          renderCurrentPage(true);
+          renderThumbnails();
+          updateNavButtons();
+        }
+
+        function removePhoto(photoIndex) {
+          if (photoIndex < 0 || photoIndex >= photos.length) return;
+          const removedPageIndex = photoIndex + 1;
+          const [removed] = photos.splice(photoIndex, 1);
+          if (removed) {
+            URL.revokeObjectURL(removed.url);
+          }
+          if (photos.length === 0) {
+            currentPageIndex = 0;
+          } else {
+            const total = getTotalPages();
+            if (currentPageIndex >= total) {
+              currentPageIndex = total - 1;
+            } else if (removedPageIndex < currentPageIndex) {
+              currentPageIndex -= 1;
+            }
+          }
+          render();
+        }
+
+        function clearAllPhotos() {
+          for (const photo of photos) {
+            URL.revokeObjectURL(photo.url);
+          }
+          photos.length = 0;
+          currentPageIndex = 0;
+          hideNotice();
+          render();
+        }
+
+        function updateNavButtons() {
+          const total = getTotalPages();
+          const atStart = currentPageIndex <= 0;
+          const atEnd = currentPageIndex >= total - 1;
+
+          prevBtn.disabled = atStart;
+          sidePrevBtn.disabled = atStart;
+          nextBtn.disabled = atEnd;
+          sideNextBtn.disabled = atEnd;
+
+          pagerIndicator.textContent = total > 0 ? `${currentPageIndex + 1} / ${total}` : '0 / 0';
+          pageNumberLabel.textContent = total > 0 ? `Page ${currentPageIndex + 1} of ${total}` : 'Page 0 of 0';
+
+          let pageKindLabel = '';
+          if (total > 0) {
+            if (currentPageIndex === 0) pageKindLabel = '표지';
+            else if (currentPageIndex === total - 1) pageKindLabel = '마무리';
+            else pageKindLabel = `사진 ${currentPageIndex}`;
+          }
+
+          topbarSummary.innerHTML =
+            total > 0
+              ? `사진 <span class="mono">${photos.length}</span>장 · <span class="mono">${currentPageIndex + 1}/${total}</span>쪽 (${pageKindLabel})`
+              : '사진을 올려 한 쪽에 한 장씩 미리보세요';
+        }
+
+        function autoResizeTextarea(el, minHeight = 68) {
+          el.style.height = 'auto';
+          el.style.height = `${Math.max(minHeight, el.scrollHeight)}px`;
+        }
+
+        function renderCurrentPage(animate = false) {
+          const total = getTotalPages();
+          if (total === 0) return;
+
+          const isCover = currentPageIndex === 0;
+          const isClosing = currentPageIndex === total - 1;
+          const isPhoto = !isCover && !isClosing;
+
+          coverPageView.classList.toggle('is-active', isCover);
+          photoPageView.classList.toggle('is-active', isPhoto);
+          closingPageView.classList.toggle('is-active', isClosing);
+
+          if (isCover) {
+            coverTitleInput.value = albumMeta.title;
+            coverSubtitleInput.value = albumMeta.subtitle;
+            coverAuthorInput.value = albumMeta.author;
+            coverDateInput.value = albumMeta.date;
+            autoResizeTextarea(coverTitleInput, 64);
+
+            metaFilename.textContent = albumMeta.title.trim() || '앨범 표지';
+            metaFilename.title = metaFilename.textContent;
+            metaSep1.style.display = 'none';
+            metaDimensions.textContent = '';
+            metaSep2.style.display = 'none';
+            metaSize.textContent = '';
+            return;
+          }
+
+          if (isClosing) {
+            closingMessageInput.value = albumMeta.closingMessage;
+            autoResizeTextarea(closingMessageInput, 180);
+
+            metaFilename.textContent = '마무리 페이지';
+            metaFilename.title = '마무리 페이지';
+            metaSep1.style.display = 'none';
+            metaDimensions.textContent = '';
+            metaSep2.style.display = 'none';
+            metaSize.textContent = '';
+            return;
+          }
+
+          const photoIdx = currentPageIndex - 1;
+          const photo = photos[photoIdx];
+          if (!photo) return;
+
+          if (animate) {
+            previewImage.classList.add('is-switching');
+            requestAnimationFrame(() => {
+              previewImage.src = photo.url;
+              previewImage.alt = photo.title ? `${photo.title} (${photoIdx + 1}번째 사진)` : `${photo.name} (${photoIdx + 1}번째 사진)`;
+              requestAnimationFrame(() => {
+                previewImage.classList.remove('is-switching');
+              });
+            });
+          } else {
+            previewImage.src = photo.url;
+            previewImage.alt = photo.title ? `${photo.title} (${photoIdx + 1}번째 사진)` : `${photo.name} (${photoIdx + 1}번째 사진)`;
+          }
+
+          photoTitleInput.value = photo.title;
+          photoDescInput.value = photo.description;
+          autoResizeTextarea(photoDescInput, 68);
+
+          metaFilename.textContent = photo.name;
+          metaFilename.title = photo.name;
+          metaSep1.style.display = '';
+          metaDimensions.textContent = photo.width && photo.height ? `${photo.width} × ${photo.height}` : '-';
+          metaSep2.style.display = '';
+          metaSize.textContent = formatBytes(photo.size);
+        }
+
+        function renderThumbnails() {
+          thumbStrip.innerHTML = '';
+          const total = getTotalPages();
+          if (total === 0) return;
+
+          // 1. Cover thumbnail (pageIndex 0)
+          const coverItem = document.createElement('div');
+          coverItem.className = `thumb-item${currentPageIndex === 0 ? ' is-active' : ''}`;
+          coverItem.setAttribute('role', 'listitem');
+          const coverBtn = document.createElement('button');
+          coverBtn.type = 'button';
+          coverBtn.className = 'thumb-special-btn';
+          coverBtn.title = albumMeta.title.trim() || '표지';
+          coverBtn.setAttribute('aria-label', '1쪽: 표지 보기');
+          coverBtn.innerHTML =
+            `<span class="thumb-special-kicker">표지</span><span class="thumb-special-sub">${(albumMeta.title.trim() || '제목 없음').replace(/</g, '&lt;')}</span>`;
+          coverBtn.addEventListener('click', () => goToPage(0));
+          coverItem.appendChild(coverBtn);
+          thumbStrip.appendChild(coverItem);
+
+          // 2. Photo thumbnails (pageIndex 1..photos.length)
+          photos.forEach((photo, idx) => {
+            const pageIdx = idx + 1;
+            const item = document.createElement('div');
+            item.className = `thumb-item${pageIdx === currentPageIndex ? ' is-active' : ''}`;
+            item.setAttribute('role', 'listitem');
+
+            const selectBtn = document.createElement('button');
+            selectBtn.type = 'button';
+            selectBtn.className = 'thumb-select-btn';
+            const displayLabel = photo.title.trim() || photo.name;
+            selectBtn.title = displayLabel;
+            selectBtn.setAttribute('aria-label', `${pageIdx + 1}쪽: ${displayLabel} 보기`);
+            selectBtn.addEventListener('click', () => goToPage(pageIdx));
+
+            const img = document.createElement('img');
+            img.src = photo.url;
+            img.alt = displayLabel;
+            img.loading = 'lazy';
+            selectBtn.appendChild(img);
+
+            const badge = document.createElement('span');
+            badge.className = 'thumb-index';
+            badge.textContent = String(idx + 1).padStart(2, '0');
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'thumb-remove-btn';
+            removeBtn.setAttribute('aria-label', `${photo.name} 삭제`);
+            removeBtn.title = '이 사진 삭제';
+            removeBtn.innerHTML =
+              '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+            removeBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              removePhoto(idx);
+            });
+
+            item.appendChild(selectBtn);
+            item.appendChild(badge);
+            item.appendChild(removeBtn);
+            thumbStrip.appendChild(item);
+          });
+
+          // 3. Closing thumbnail (pageIndex photos.length + 1)
+          const closingPageIdx = photos.length + 1;
+          const closingItem = document.createElement('div');
+          closingItem.className = `thumb-item${currentPageIndex === closingPageIdx ? ' is-active' : ''}`;
+          closingItem.setAttribute('role', 'listitem');
+          const closingBtn = document.createElement('button');
+          closingBtn.type = 'button';
+          closingBtn.className = 'thumb-special-btn';
+          closingBtn.title = '마무리 페이지';
+          closingBtn.setAttribute('aria-label', `${total}쪽: 마무리 보기`);
+          closingBtn.innerHTML =
+            `<span class="thumb-special-kicker">마무리</span><span class="thumb-special-sub">${albumMeta.closingMessage.trim() ? '작성됨' : '문구 입력'}</span>`;
+          closingBtn.addEventListener('click', () => goToPage(closingPageIdx));
+          closingItem.appendChild(closingBtn);
+          thumbStrip.appendChild(closingItem);
+
+          // 4. Add-more thumbnail button at the end of strip
+          const addBtn = document.createElement('button');
+          addBtn.type = 'button';
+          addBtn.className = 'thumb-add-btn';
+          addBtn.innerHTML =
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>추가</span>';
+          addBtn.addEventListener('click', openFilePicker);
+          thumbStrip.appendChild(addBtn);
+
+          // Keep active thumbnail smoothly scrolled into view
+          const activeEl = thumbStrip.children[currentPageIndex];
+          if (activeEl) {
+            activeEl.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+          }
+        }
+
+        function render() {
+          const hasPhotos = photos.length > 0;
+          emptyStage.style.display = hasPhotos ? 'none' : 'flex';
+          albumWorkspace.classList.toggle('is-visible', hasPhotos);
+
+          if (!hasPhotos) {
+            previewImage.removeAttribute('src');
+            updateNavButtons();
+            return;
+          }
+
+          workspaceCount.textContent = `사진 ${photos.length}장 · 전체 ${getTotalPages()}쪽`;
+          renderCurrentPage(false);
+          renderThumbnails();
+          updateNavButtons();
+        }
+
+        // PDF Export Helpers
+        function loadImageElement(url) {
+          return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('이미지를 불러오지 못했습니다.'));
+            img.src = url;
+          });
+        }
+
+        function wrapCanvasText(ctx, text, maxWidth) {
+          const lines = [];
+          const paragraphs = String(text || '').split(/\r?\n/);
+
+          for (const paragraph of paragraphs) {
+            if (paragraph.length === 0) {
+              lines.push('');
+              continue;
+            }
+            let currentLine = '';
+            for (const char of Array.from(paragraph)) {
+              const testLine = currentLine + char;
+              if (ctx.measureText(testLine).width > maxWidth && currentLine.length > 0) {
+                lines.push(currentLine.trimEnd());
+                currentLine = char === ' ' ? '' : char;
+              } else {
+                currentLine = testLine;
+              }
+            }
+            if (currentLine.length > 0) {
+              lines.push(currentLine.trimEnd());
+            }
+          }
+          return lines;
+        }
+
+        async function ensureFontsLoaded(fontConfig) {
+          if (document.fonts && document.fonts.ready) {
+            await document.fonts.ready;
+          }
+          if (document.fonts && typeof document.fonts.load === 'function' && fontConfig && fontConfig.loadSpecs) {
+            await Promise.allSettled(fontConfig.loadSpecs.map((spec) => document.fonts.load(spec)));
+          }
+        }
+
+        async function renderAlbumPageToCanvas(photo, index, total, mimeType = 'image/jpeg') {
+          const theme = ALBUM_THEMES[currentTheme] || ALBUM_THEMES.white;
+          const fontCfg = ALBUM_FONTS[currentFont] || ALBUM_FONTS.gothic;
+          const PAGE_W = 1654; // A4 Portrait @ 200 DPI
+          const PAGE_H = 2339;
+          const MARGIN_X = 96;
+          const MARGIN_TOP = 96;
+          const CONTENT_W = PAGE_W - MARGIN_X * 2;
+          const MAT_H = 1280;
+          const MAT_PAD = 32;
+          const FOOTER_Y = PAGE_H - 96;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = PAGE_W;
+          canvas.height = PAGE_H;
+          const ctx = canvas.getContext('2d');
+
+          // Album page background
+          ctx.fillStyle = theme.bg;
+          ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+
+          // Archival photo mat container
+          ctx.fillStyle = theme.mat;
+          ctx.fillRect(MARGIN_X, MARGIN_TOP, CONTENT_W, MAT_H);
+          ctx.strokeStyle = theme.matBorder;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(MARGIN_X, MARGIN_TOP, CONTENT_W, MAT_H);
+
+          // Draw photo centered with aspect ratio preserved
+          const img = await loadImageElement(photo.url);
+          const innerW = CONTENT_W - MAT_PAD * 2;
+          const innerH = MAT_H - MAT_PAD * 2;
+          const scale = Math.min(innerW / img.naturalWidth, innerH / img.naturalHeight);
+          const drawW = img.naturalWidth * scale;
+          const drawH = img.naturalHeight * scale;
+          const drawX = MARGIN_X + (CONTENT_W - drawW) / 2;
+          const drawY = MARGIN_TOP + (MAT_H - drawH) / 2;
+
+          ctx.save();
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.16)';
+          ctx.shadowBlur = 18;
+          ctx.shadowOffsetY = 6;
+          ctx.drawImage(img, drawX, drawY, drawW, drawH);
+          ctx.restore();
+
+          // Editorial Title & Description below mat
+          let cursorY = MARGIN_TOP + MAT_H + 74;
+          const maxTextY = FOOTER_Y - 84;
+          const trimmedTitle = (photo.title || '').trim();
+          const trimmedDesc = (photo.description || '').trim();
+
+          if (trimmedTitle) {
+            const titlePx = Math.round(46 * fontCfg.titleScale);
+            ctx.font = `${fontCfg.titleWeight} ${titlePx}px ${fontCfg.titleFamily}`;
+            ctx.fillStyle = theme.text;
+            ctx.textBaseline = 'top';
+            const titleLines = wrapCanvasText(ctx, trimmedTitle, CONTENT_W);
+            const titleLineHeight = Math.round(titlePx * 1.38);
+            for (const line of titleLines) {
+              if (cursorY + titleLineHeight > maxTextY) break;
+              ctx.fillText(line, MARGIN_X, cursorY);
+              cursorY += titleLineHeight;
+            }
+            cursorY += 22;
+          }
+
+          if (trimmedDesc) {
+            const descPx = Math.round(28 * fontCfg.bodyScale);
+            ctx.font = `${fontCfg.bodyWeight} ${descPx}px ${fontCfg.bodyFamily}`;
+            ctx.fillStyle = theme.textSecondary;
+            ctx.textBaseline = 'top';
+            const descLines = wrapCanvasText(ctx, trimmedDesc, CONTENT_W);
+            const descLineHeight = Math.round(descPx * 1.62);
+            for (let i = 0; i < descLines.length; i += 1) {
+              if (cursorY + descLineHeight > maxTextY) {
+                break;
+              }
+              ctx.fillText(descLines[i], MARGIN_X, cursorY);
+              cursorY += descLineHeight;
+            }
+          }
+
+          // Footer hairline & metadata
+          const dividerY = FOOTER_Y - 46;
+          ctx.strokeStyle = theme.border;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(MARGIN_X, dividerY);
+          ctx.lineTo(PAGE_W - MARGIN_X, dividerY);
+          ctx.stroke();
+
+          ctx.font = '400 22px "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillStyle = theme.textMuted;
+          ctx.textBaseline = 'alphabetic';
+          const leftMeta = photo.width && photo.height
+            ? `${photo.name} · ${photo.width} × ${photo.height}`
+            : photo.name;
+          ctx.fillText(leftMeta, MARGIN_X, FOOTER_Y);
+
+          ctx.font = '500 24px "Playfair Display", "Noto Serif KR", Georgia, serif';
+          ctx.fillStyle = theme.text;
+          ctx.textAlign = 'right';
+          ctx.fillText(`Page ${index + 1} of ${total}`, PAGE_W - MARGIN_X, FOOTER_Y);
+          ctx.textAlign = 'left';
+
+          return mimeType === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.92);
+        }
+
+        async function renderCoverPageToCanvas(meta, totalPages, mimeType = 'image/jpeg') {
+          const theme = ALBUM_THEMES[currentTheme] || ALBUM_THEMES.white;
+          const fontCfg = ALBUM_FONTS[currentFont] || ALBUM_FONTS.gothic;
+          const PAGE_W = 1654;
+          const PAGE_H = 2339;
+          const MARGIN = 96;
+          const CONTENT_W = PAGE_W - MARGIN * 2;
+          const CENTER_X = PAGE_W / 2;
+          const FOOTER_Y = PAGE_H - 96;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = PAGE_W;
+          canvas.height = PAGE_H;
+          const ctx = canvas.getContext('2d');
+
+          ctx.fillStyle = theme.bg;
+          ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+
+          // Archival cover mat inset
+          ctx.fillStyle = theme.mat;
+          ctx.fillRect(MARGIN, MARGIN, CONTENT_W, PAGE_H - MARGIN * 2 - 84);
+          ctx.strokeStyle = theme.matBorder;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(MARGIN, MARGIN, CONTENT_W, PAGE_H - MARGIN * 2 - 84);
+
+          const titleText = (meta.title || '').trim();
+          const subtitleText = (meta.subtitle || '').trim();
+          const authorText = (meta.author || '').trim();
+          const dateText = (meta.date || '').trim();
+
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+
+          // Kicker
+          ctx.font = '500 22px "Noto Sans KR", sans-serif';
+          ctx.fillStyle = theme.textMuted;
+          ctx.fillText('PHOTO ALBUM', CENTER_X, 540);
+
+          let cursorY = 640;
+
+          if (titleText) {
+            const coverTitlePx = Math.round(92 * fontCfg.titleScale);
+            ctx.font = `${fontCfg.titleWeight} ${coverTitlePx}px ${fontCfg.titleFamily}`;
+            ctx.fillStyle = theme.text;
+            const titleLines = wrapCanvasText(ctx, titleText, CONTENT_W - 180);
+            const titleLH = Math.round(coverTitlePx * 1.3);
+            for (const line of titleLines.slice(0, 4)) {
+              ctx.fillText(line, CENTER_X, cursorY);
+              cursorY += titleLH;
+            }
+            cursorY += 28;
+          } else {
+            const coverTitlePx = Math.round(84 * fontCfg.titleScale);
+            ctx.font = `${fontCfg.titleWeight} ${coverTitlePx}px ${fontCfg.titleFamily}`;
+            ctx.fillStyle = theme.text;
+            ctx.fillText('Photo Album', CENTER_X, cursorY);
+            cursorY += 140;
+          }
+
+          if (subtitleText) {
+            const subPx = Math.round(38 * fontCfg.bodyScale);
+            ctx.font = `${fontCfg.bodyWeight} ${subPx}px ${fontCfg.bodyFamily}`;
+            ctx.fillStyle = theme.textSecondary;
+            const subLines = wrapCanvasText(ctx, subtitleText, CONTENT_W - 220);
+            const subLH = Math.round(subPx * 1.48);
+            for (const line of subLines.slice(0, 3)) {
+              ctx.fillText(line, CENTER_X, cursorY);
+              cursorY += subLH;
+            }
+            cursorY += 34;
+          }
+
+          // Divider
+          ctx.strokeStyle = theme.divider;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(CENTER_X - 72, cursorY + 24);
+          ctx.lineTo(CENTER_X + 72, cursorY + 24);
+          ctx.stroke();
+
+          // Author & Date
+          let metaY = Math.max(cursorY + 92, 1460);
+          if (authorText) {
+            const authorPx = Math.round(36 * fontCfg.bodyScale);
+            ctx.font = `500 ${authorPx}px ${fontCfg.bodyFamily}`;
+            ctx.fillStyle = theme.text;
+            ctx.fillText(authorText, CENTER_X, metaY);
+            metaY += Math.round(authorPx * 1.55);
+          }
+          if (dateText) {
+            const datePx = Math.round(30 * fontCfg.bodyScale);
+            ctx.font = `${fontCfg.bodyWeight} ${datePx}px ${fontCfg.bodyFamily}`;
+            ctx.fillStyle = theme.textSecondary;
+            ctx.fillText(dateText, CENTER_X, metaY);
+          }
+
+          // Footer
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
+          ctx.font = '400 22px "Noto Sans KR", sans-serif';
+          ctx.fillStyle = theme.textMuted;
+          ctx.fillText(titleText || '앨범 표지', MARGIN, FOOTER_Y);
+
+          ctx.font = '500 24px "Playfair Display", "Noto Serif KR", Georgia, serif';
+          ctx.fillStyle = theme.text;
+          ctx.textAlign = 'right';
+          ctx.fillText(`Page 1 of ${totalPages}`, PAGE_W - MARGIN, FOOTER_Y);
+          ctx.textAlign = 'left';
+
+          return mimeType === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.92);
+        }
+
+        async function renderClosingPageToCanvas(meta, totalPages, mimeType = 'image/jpeg') {
+          const theme = ALBUM_THEMES[currentTheme] || ALBUM_THEMES.white;
+          const fontCfg = ALBUM_FONTS[currentFont] || ALBUM_FONTS.gothic;
+          const PAGE_W = 1654;
+          const PAGE_H = 2339;
+          const MARGIN = 96;
+          const CONTENT_W = PAGE_W - MARGIN * 2;
+          const CENTER_X = PAGE_W / 2;
+          const FOOTER_Y = PAGE_H - 96;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = PAGE_W;
+          canvas.height = PAGE_H;
+          const ctx = canvas.getContext('2d');
+
+          ctx.fillStyle = theme.bg;
+          ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+
+          ctx.fillStyle = theme.mat;
+          ctx.fillRect(MARGIN, MARGIN, CONTENT_W, PAGE_H - MARGIN * 2 - 84);
+          ctx.strokeStyle = theme.matBorder;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(MARGIN, MARGIN, CONTENT_W, PAGE_H - MARGIN * 2 - 84);
+
+          const closingText = (meta.closingMessage || '').trim();
+
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+
+          ctx.font = '500 22px "Noto Sans KR", sans-serif';
+          ctx.fillStyle = theme.textMuted;
+          ctx.fillText('EPILOGUE', CENTER_X, 620);
+
+          ctx.strokeStyle = theme.divider;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(CENTER_X - 60, 700);
+          ctx.lineTo(CENTER_X + 60, 700);
+          ctx.stroke();
+
+          let cursorY = 780;
+          const closingPx = Math.round(40 * fontCfg.titleScale);
+          if (closingText) {
+            ctx.font = `${fontCfg.titleWeight} ${closingPx}px ${fontCfg.titleFamily}`;
+            ctx.fillStyle = theme.text;
+            const lines = wrapCanvasText(ctx, closingText, CONTENT_W - 260);
+            const lineHeight = Math.round(closingPx * 1.78);
+            const maxY = FOOTER_Y - 220;
+            for (const line of lines) {
+              if (cursorY + lineHeight > maxY) break;
+              ctx.fillText(line, CENTER_X, cursorY);
+              cursorY += lineHeight;
+            }
+          } else {
+            ctx.font = `${fontCfg.titleWeight} ${closingPx}px ${fontCfg.titleFamily}`;
+            ctx.fillStyle = theme.textMuted;
+            ctx.fillText('Thank you for viewing.', CENTER_X, cursorY);
+            cursorY += Math.round(closingPx * 1.78);
+          }
+
+          ctx.strokeStyle = theme.divider;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(CENTER_X - 60, Math.min(cursorY + 64, FOOTER_Y - 140));
+          ctx.lineTo(CENTER_X + 60, Math.min(cursorY + 64, FOOTER_Y - 140));
+          ctx.stroke();
+
+          // Footer
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
+          ctx.font = '400 22px "Noto Sans KR", sans-serif';
+          ctx.fillStyle = theme.textMuted;
+          ctx.fillText('마무리 페이지', MARGIN, FOOTER_Y);
+
+          ctx.font = '500 24px "Playfair Display", "Noto Serif KR", Georgia, serif';
+          ctx.fillStyle = theme.text;
+          ctx.textAlign = 'right';
+          ctx.fillText(`Page ${totalPages} of ${totalPages}`, PAGE_W - MARGIN, FOOTER_Y);
+          ctx.textAlign = 'left';
+
+          return mimeType === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.92);
+        }
+
+        function setAlbumTheme(themeKey) {
+          if (!ALBUM_THEMES[themeKey]) return;
+          currentTheme = themeKey;
+          albumPageCard.setAttribute('data-album-theme', themeKey);
+          themeButtons.forEach((btn) => {
+            const isSelected = btn.getAttribute('data-theme') === themeKey;
+            btn.classList.toggle('is-active', isSelected);
+            btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+          });
+        }
+
+        function setAlbumFont(fontKey) {
+          if (!ALBUM_FONTS[fontKey]) return;
+          currentFont = fontKey;
+          albumPageCard.setAttribute('data-album-font', fontKey);
+          fontButtons.forEach((btn) => {
+            const isSelected = btn.getAttribute('data-font') === fontKey;
+            btn.classList.toggle('is-active', isSelected);
+            btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+          });
+          // Re-measure textareas in case line heights changed with new font
+          if (photos.length > 0) {
+            const total = getTotalPages();
+            if (currentPageIndex === 0) {
+              autoResizeTextarea(coverTitleInput, 64);
+            } else if (currentPageIndex === total - 1) {
+              autoResizeTextarea(closingMessageInput, 180);
+            } else {
+              autoResizeTextarea(photoDescInput, 68);
+            }
+          }
+        }
+
+        let isExportingPdf = false;
+        let isExportingPng = false;
+
+        async function exportCurrentPageToPng() {
+          const totalPages = getTotalPages();
+          if (totalPages === 0 || isExportingPng) return;
+          hideNotice();
+
+          isExportingPng = true;
+          exportPngBtn.disabled = true;
+          exportPngBtn.setAttribute('aria-busy', 'true');
+          exportPngLabel.textContent = 'PNG 생성 중...';
+
+          try {
+            const fontConfig = ALBUM_FONTS[currentFont] || ALBUM_FONTS.gothic;
+            await ensureFontsLoaded(fontConfig);
+
+            let dataUrl = '';
+            if (currentPageIndex === 0) {
+              dataUrl = await renderCoverPageToCanvas(albumMeta, totalPages, 'image/png');
+            } else if (currentPageIndex === totalPages - 1) {
+              dataUrl = await renderClosingPageToCanvas(albumMeta, totalPages, 'image/png');
+            } else {
+              const photo = photos[currentPageIndex - 1];
+              dataUrl = await renderAlbumPageToCanvas(photo, currentPageIndex, totalPages, 'image/png');
+            }
+
+            const link = document.createElement('a');
+            const pageStr = String(currentPageIndex + 1).padStart(2, '0');
+            link.href = dataUrl;
+            link.download = `photo-album-page-${pageStr}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          } catch (err) {
+            console.error(err);
+            showNotice('PNG 이미지를 저장하는 중 오류가 발생했습니다. 다시 시도해 주세요.');
+          } finally {
+            isExportingPng = false;
+            exportPngBtn.disabled = false;
+            exportPngBtn.removeAttribute('aria-busy');
+            exportPngLabel.textContent = 'PNG로 저장';
+          }
+        }
+
+        async function exportAlbumToPdf() {
+          if (photos.length === 0 || isExportingPdf) return;
+          hideNotice();
+
+          if (!window.jspdf || !window.jspdf.jsPDF) {
+            showNotice('PDF 생성 라이브러리(jsPDF)를 불러오지 못했습니다. 네트워크 연결을 확인한 뒤 페이지를 새로고침해 주세요.');
+            return;
+          }
+
+          isExportingPdf = true;
+          exportPdfBtn.disabled = true;
+          exportPdfBtn.setAttribute('aria-busy', 'true');
+
+          try {
+            const fontConfig = ALBUM_FONTS[currentFont] || ALBUM_FONTS.gothic;
+            await ensureFontsLoaded(fontConfig);
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({
+              orientation: 'portrait',
+              unit: 'mm',
+              format: 'a4',
+              compress: true,
+            });
+
+            const pageWidthMm = pdf.internal.pageSize.getWidth();
+            const pageHeightMm = pdf.internal.pageSize.getHeight();
+            const totalPages = getTotalPages();
+
+            // 1. Cover Page
+            exportPdfLabel.textContent = `PDF 생성 중 (1/${totalPages})`;
+            const coverDataUrl = await renderCoverPageToCanvas(albumMeta, totalPages, 'image/jpeg');
+            pdf.addImage(coverDataUrl, 'JPEG', 0, 0, pageWidthMm, pageHeightMm, undefined, 'FAST');
+
+            // 2. Photo Pages
+            for (let i = 0; i < photos.length; i += 1) {
+              const pageNumber = i + 2;
+              exportPdfLabel.textContent = `PDF 생성 중 (${pageNumber}/${totalPages})`;
+              const pageDataUrl = await renderAlbumPageToCanvas(photos[i], i + 1, totalPages, 'image/jpeg');
+              pdf.addPage();
+              pdf.addImage(pageDataUrl, 'JPEG', 0, 0, pageWidthMm, pageHeightMm, undefined, 'FAST');
+            }
+
+            // 3. Closing Page
+            exportPdfLabel.textContent = `PDF 생성 중 (${totalPages}/${totalPages})`;
+            const closingDataUrl = await renderClosingPageToCanvas(albumMeta, totalPages, 'image/jpeg');
+            pdf.addPage();
+            pdf.addImage(closingDataUrl, 'JPEG', 0, 0, pageWidthMm, pageHeightMm, undefined, 'FAST');
+
+            const today = new Date().toISOString().slice(0, 10);
+            pdf.save(`photo-album-${today}.pdf`);
+          } catch (err) {
+            console.error(err);
+            showNotice('PDF를 생성하는 중 오류가 발생했습니다. 다시 시도해 주세요.');
+          } finally {
+            isExportingPdf = false;
+            exportPdfBtn.disabled = false;
+            exportPdfBtn.removeAttribute('aria-busy');
+            exportPdfLabel.textContent = 'PDF로 저장';
+          }
+        }
+
+        // Event Listeners
+        themeButtons.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            setAlbumTheme(btn.getAttribute('data-theme'));
+          });
+        });
+
+        fontButtons.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            setAlbumFont(btn.getAttribute('data-font'));
+          });
+        });
+
+        topUploadBtn.addEventListener('click', openFilePicker);
+        emptyUploadBtn.addEventListener('click', openFilePicker);
+        addMoreBtn.addEventListener('click', openFilePicker);
+        clearAllBtn.addEventListener('click', clearAllPhotos);
+        exportPngBtn.addEventListener('click', exportCurrentPageToPng);
+        exportPdfBtn.addEventListener('click', exportAlbumToPdf);
+        noticeCloseBtn.addEventListener('click', hideNotice);
+
+        fileInput.addEventListener('change', (e) => {
+          handleFiles(e.target.files);
+        });
+
+        prevBtn.addEventListener('click', () => goToPage(currentPageIndex - 1));
+        sidePrevBtn.addEventListener('click', () => goToPage(currentPageIndex - 1));
+        nextBtn.addEventListener('click', () => goToPage(currentPageIndex + 1));
+        sideNextBtn.addEventListener('click', () => goToPage(currentPageIndex + 1));
+
+        coverTitleInput.addEventListener('input', (e) => {
+          albumMeta.title = e.target.value;
+          autoResizeTextarea(e.target, 64);
+          if (currentPageIndex === 0) {
+            metaFilename.textContent = albumMeta.title.trim() || '앨범 표지';
+            metaFilename.title = metaFilename.textContent;
+          }
+          const coverSub = thumbStrip.children[0]?.querySelector('.thumb-special-sub');
+          if (coverSub) {
+            coverSub.textContent = albumMeta.title.trim() || '제목 없음';
+          }
+        });
+
+        coverSubtitleInput.addEventListener('input', (e) => {
+          albumMeta.subtitle = e.target.value;
+        });
+
+        coverAuthorInput.addEventListener('input', (e) => {
+          albumMeta.author = e.target.value;
+        });
+
+        coverDateInput.addEventListener('input', (e) => {
+          albumMeta.date = e.target.value;
+        });
+
+        closingMessageInput.addEventListener('input', (e) => {
+          albumMeta.closingMessage = e.target.value;
+          autoResizeTextarea(e.target, 180);
+          const closingIdx = photos.length + 1;
+          const closingSub = thumbStrip.children[closingIdx]?.querySelector('.thumb-special-sub');
+          if (closingSub) {
+            closingSub.textContent = albumMeta.closingMessage.trim() ? '작성됨' : '문구 입력';
+          }
+        });
+
+        photoTitleInput.addEventListener('input', (e) => {
+          const photoIdx = currentPageIndex - 1;
+          const photo = photos[photoIdx];
+          if (!photo) return;
+          photo.title = e.target.value;
+          const activeBtn = thumbStrip.children[currentPageIndex]?.querySelector('.thumb-select-btn');
+          if (activeBtn) {
+            const displayLabel = photo.title.trim() || photo.name;
+            activeBtn.title = displayLabel;
+            activeBtn.setAttribute('aria-label', `${currentPageIndex + 1}쪽: ${displayLabel} 보기`);
+          }
+        });
+
+        photoDescInput.addEventListener('input', (e) => {
+          const photoIdx = currentPageIndex - 1;
+          const photo = photos[photoIdx];
+          if (!photo) return;
+          photo.description = e.target.value;
+          autoResizeTextarea(e.target, 68);
+        });
+
+        // Keyboard navigation (Left / Right arrow keys)
+        document.addEventListener('keydown', (e) => {
+          if (photos.length === 0) return;
+          if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+          if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            goToPage(currentPageIndex - 1);
+          } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            goToPage(currentPageIndex + 1);
+          }
+        });
+
+        // Drag & Drop helpers
+        function setupDropTarget(targetEl) {
+          ['dragenter', 'dragover'].forEach((evtName) => {
+            targetEl.addEventListener(evtName, (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              targetEl.classList.add('is-dragover');
+            });
+          });
+
+          ['dragleave', 'drop'].forEach((evtName) => {
+            targetEl.addEventListener(evtName, (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (evtName === 'dragleave' && targetEl.contains(e.relatedTarget)) {
+                return;
+              }
+              targetEl.classList.remove('is-dragover');
+            });
+          });
+
+          targetEl.addEventListener('drop', (e) => {
+            if (e.dataTransfer && e.dataTransfer.files) {
+              handleFiles(e.dataTransfer.files);
+            }
+          });
+        }
+
+        setupDropTarget(dropzone);
+        setupDropTarget(stageDropArea);
+
+        // Prevent accidental file navigation when dropping outside dropzone
+        window.addEventListener('dragover', (e) => e.preventDefault());
+        window.addEventListener('drop', (e) => e.preventDefault());
+
+        render();
+      })();
+    </script>
+  </body>
+</html>

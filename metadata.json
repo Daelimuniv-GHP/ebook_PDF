@@ -1,0 +1,6 @@
+{
+  "name": "Photo Album Studio",
+  "description": "Upload multiple photos and preview them one per page in a clean single-file HTML photo album.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
